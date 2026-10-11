@@ -1,0 +1,336 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "./config.schema.json",
+  "title": "devctl configuration",
+  "description": "Schema for devctl YAML configuration files.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 1,
+      "description": "Configuration file version. The only supported value is 1."
+    },
+    "workspace": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Root directory where repositories will be cloned."
+    },
+    "concurrency_mode": {
+      "type": "string",
+      "enum": [
+        "sequential",
+        "parallel",
+        "semaphore"
+      ],
+      "description": "Execution mode used by doctor and bootstrap commands."
+    },
+    "max_concurrency": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Maximum number of concurrent operations. Required when concurrency_mode is semaphore."
+    },
+    "healthchecks": {
+      "type": "array",
+      "description": "Connectivity checks executed by the doctor command.",
+      "items": {
+        "$ref": "#/$defs/healthcheck"
+      },
+      "default": []
+    },
+    "tools": {
+      "type": "array",
+      "description": "Required tools validated by the doctor command.",
+      "items": {
+        "$ref": "#/$defs/tool"
+      },
+      "default": []
+    },
+    "repos": {
+      "type": "array",
+      "description": "Repositories cloned by the bootstrap command.",
+      "items": {
+        "$ref": "#/$defs/repo"
+      },
+      "default": []
+    },
+    "tasks": {
+      "type": "array",
+      "description": "Generic tasks executed by the run command.",
+      "items": {
+        "$ref": "#/$defs/task"
+      },
+      "default": []
+    },
+    "settings": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Global settings for devctl features.",
+      "properties": {
+        "ai": {
+          "$ref": "#/$defs/ai_settings"
+        }
+      }
+    }
+  },
+  "required": [
+    "version",
+    "workspace"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "concurrency_mode": {
+            "const": "semaphore"
+          }
+        },
+        "required": [
+          "concurrency_mode"
+        ]
+      },
+      "then": {
+        "required": [
+          "max_concurrency"
+        ]
+      }
+    }
+  ],
+  "$defs": {
+    "duration": {
+      "type": "string",
+      "pattern": "^(?:\\d+(?:\\.\\d+)?(?:ns|us|µs|ms|s|m|h))+$",
+      "description": "Positive Go duration string, for example 500ms, 2s, or 1m30s."
+    },
+    "healthcheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "url": {
+          "type": "string",
+          "minLength": 1,
+          "description": "HTTP(S) URL for type=http or host:port endpoint for type=tcp."
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "http",
+            "tcp"
+          ]
+        },
+        "timeout": {
+          "$ref": "#/$defs/duration"
+        }
+      },
+      "required": [
+        "name",
+        "url",
+        "type",
+        "timeout"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "http"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "url": {
+                "type": "string",
+                "pattern": "^https?://.+"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "tcp"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "url": {
+                "type": "string",
+                "pattern": "^(?:\\[[0-9A-Fa-f:]+\\]|[^\\s:/]+):\\d+$"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "tool": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "command": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "name",
+        "command"
+      ]
+    },
+    "repo": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "minLength": 1,
+          "description": "Repository URL accepted by the current config validator."
+        },
+        "dir": {
+          "type": "string",
+          "minLength": 1
+        },
+        "gitflow": {
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "required": [
+        "name",
+        "url",
+        "dir"
+      ]
+    },
+    "task": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "parallel",
+            "sequential"
+          ],
+          "description": "Execution mode used to run subtasks."
+        },
+        "subtasks": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/subtask"
+          }
+        }
+      },
+      "required": [
+        "name",
+        "mode",
+        "subtasks"
+      ]
+    },
+    "subtask": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "dir": {
+          "type": "string",
+          "minLength": 1
+        },
+        "commands": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "required": [
+        "name",
+        "dir",
+        "commands"
+      ]
+    },
+    "ai_settings": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "AI engine configuration.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable or disable AI-powered commands."
+        },
+        "engine": {
+          "type": "string",
+          "enum": ["ollama"],
+          "description": "AI engine to use."
+        },
+        "ollama": {
+          "$ref": "#/$defs/ollama_settings"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "engine": { "const": "ollama" } },
+            "required": ["engine"]
+          },
+          "then": {
+            "required": ["ollama"]
+          }
+        }
+      ]
+    },
+    "ollama_settings": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Configuration for the Ollama AI engine.",
+      "properties": {
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Ollama model name (e.g. gemma4)."
+        },
+        "base_url": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Base URL of the Ollama HTTP API (e.g. http://localhost:11434)."
+        },
+        "timeout": {
+          "type": "string",
+          "description": "Maximum duration to wait for an Ollama response (e.g. 10m, 600s). Defaults to 5m."
+        }
+      },
+      "required": ["model", "base_url"]
+    }
+  }
+}

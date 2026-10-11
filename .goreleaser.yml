@@ -1,0 +1,46 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+project_name: devctl
+version: 2
+
+snapshot:
+  version_template: "{{ .Version }}-SNAPSHOT"
+
+builds:
+  - binary: devctl
+    goos:
+      - linux
+      - windows
+    goarch:
+      - amd64
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  sort: asc
+  use: git
+  format: "{{.Message}}"
+
+  filters:
+    include:
+      - "^feat"
+      - "^refactor"
+      - "^fix"
+
+  groups:
+    - title: "✨ Features"
+      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+    - title: "🛠️ Refactor"
+      regexp: '^.*?refactor(\([[:word:]]+\))??!?:.+$'
+    - title: "🐞 Bug Fixes"
+      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+
+archives:
+  - name_template: "{{ .ProjectName }}-{{ .Version }}-{{ .Os }}-{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats: ["zip"]
+    files:
+      - README.md
+      - CHANGELOG.md
+      - configs/config.schema.json
+      - configs/config.example.yaml

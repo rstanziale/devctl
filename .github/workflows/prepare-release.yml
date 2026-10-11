@@ -1,0 +1,85 @@
+name: Prepare Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (e.g. v1.2.0)"
+        required: true
+
+concurrency:
+  group: prepare-release
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_TOKEN }}
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: "1.27.x"
+
+      - name: Test
+        run: go test ./...
+
+      - name: Build
+        run: go build -v ./...
+
+      - name: Validate GoReleaser (dry-run)
+        uses: goreleaser/goreleaser-action@v7
+        with:
+          version: '~> v2'
+          args: release --snapshot --clean
+
+      - name: Generate CHANGELOG.md
+        uses: orhun/git-cliff-action@v4
+        id: git-cliff
+        with:
+          version: v2.12.0
+          config: cliff.toml
+          args: --tag ${{ github.event.inputs.version }}
+        env:
+          OUTPUT: CHANGELOG.md
+
+      - name: Create release branch and commit changelog
+        id: branch
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          BRANCH="release/${VERSION}"
+
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+
+          git switch -c "$BRANCH"
+          git add CHANGELOG.md
+          git commit -m "chore(release): update changelog for ${VERSION}"
+          git push origin "$BRANCH"
+
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+
+      - name: Create and auto-merge release PR
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          BRANCH="${{ steps.branch.outputs.branch }}"
+
+          PR_URL=$(gh pr create \
+            --base main \
+            --head "$BRANCH" \
+            --title "chore(release): update changelog for ${VERSION}" \
+            --body "Automated release preparation for ${VERSION}.")
+
+          gh pr merge "$PR_URL" --auto --merge --delete-branch
